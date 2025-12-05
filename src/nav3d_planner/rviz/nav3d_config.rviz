@@ -1,0 +1,166 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+    
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 1
+      Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Plane: XY
+      Plane Cell Count: 50
+      Reference Frame: map
+      
+    - Alpha: 0.5
+      Class: rviz_default_plugins/PointCloud2
+      Enabled: true
+      Name: Map PointCloud
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map_pointcloud
+      Color Transformer: AxisColor
+      Size (m): 0.05
+      Style: Points
+      
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Enabled: true
+      Name: Planned Path
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /planned_path
+      Color: 0; 255; 0
+      Line Style: Lines
+      Line Width: 0.05
+      
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Planning Markers
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /planning_markers
+        
+    - Alpha: 1
+      Class: rviz_default_plugins/Pose
+      Enabled: true
+      Name: Current Pose
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /current_pose
+      Shape: Arrow
+      Color: 255; 0; 0
+      Shaft Length: 0.3
+      Shaft Radius: 0.05
+      Head Length: 0.2
+      Head Radius: 0.1
+      
+    - Alpha: 1
+      Class: rviz_default_plugins/Pose
+      Enabled: true
+      Name: Goal Pose
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+      Shape: Arrow
+      Color: 0; 255; 255
+      Shaft Length: 0.3
+      Shaft Radius: 0.05
+      Head Length: 0.2
+      Head Radius: 0.1
+      
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+        base_link:
+          Value: true
+        base_scan:
+          Value: true
+        map:
+          Value: true
+        odom:
+          Value: true
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Update Interval: 0
+      
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: map
+    Frame Rate: 30
+    
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+    - Class: rviz_default_plugins/SetInitialPose
+      Covariance x: 0.25
+      Covariance y: 0.25
+      Covariance yaw: 0.068539
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+    - Class: rviz_default_plugins/PublishPoint
+      Single click: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /clicked_point
+        
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 20
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Value: false
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Pitch: 0.785
+      Target Frame: map
+      Yaw: 0.785
+      
+Window Geometry:
+  Height: 1016
+  Width: 1920

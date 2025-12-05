@@ -1,0 +1,9 @@
+planner_3d:
+  ros__parameters:
+    map_pcd_file: ""
+    resolution: 0.2          # Voxel resolution in meters
+    robot_radius: 0.3        # Safety radius around robot
+    max_planning_time: 5.0   # Maximum planning time in seconds
+    step_size: 0.5           # RRT step size
+    goal_tolerance: 0.5      # Goal reached tolerance in meters
+    use_sim_time: false
