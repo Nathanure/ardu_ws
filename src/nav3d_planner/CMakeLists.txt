@@ -29,6 +29,7 @@ include_directories(
 install(PROGRAMS
   scripts/planner_3d_node.py
   scripts/goal_publisher.py
+  scripts/mission_planner.py
   scripts/ardupilot_interface.py
   scripts/odom_to_pose_node.py
   scripts/odom_to_tf_node.py
