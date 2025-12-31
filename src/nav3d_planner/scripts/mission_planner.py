@@ -36,6 +36,9 @@ class MissionPlanner(Node):
         self.get_logger().info("✓ Mode -> GUIDED")
         time.sleep(1)
         
+        # Verify GUIDED mode is active
+        self.verify_guided_mode()
+        
         # Check if on the ground
         self.get_logger().info("Checking altitude...")
         on_ground = self.is_on_ground()
@@ -97,6 +100,36 @@ class MissionPlanner(Node):
             self.get_logger().warn(f"  Error checking altitude: {e}, assuming on ground")
             return True
     
+    def verify_guided_mode(self):
+        """Verify that GUIDED mode is active"""
+        self.get_logger().info("Verifying GUIDED mode...")
+        try:
+            msg = self.connection.recv_match(type='HEARTBEAT', blocking=True, timeout=3.0)
+            if msg:
+                mode_mapping = self.connection.mode_mapping()
+                if mode_mapping:
+                    current_mode = None
+                    for mode_name, mode_num in mode_mapping.items():
+                        if mode_num == msg.custom_mode:
+                            current_mode = mode_name
+                            break
+                    
+                    if current_mode == 'GUIDED':
+                        self.get_logger().info("✓ GUIDED mode confirmed!")
+                        return True
+                    else:
+                        self.get_logger().error(f"✗ Mode is {current_mode}, not GUIDED!")
+                        self.get_logger().error("  Trying to set GUIDED mode again...")
+                        self.connection.set_mode_apm('GUIDED')
+                        time.sleep(1)
+                        return False
+            else:
+                self.get_logger().warn("Could not verify mode (no heartbeat)")
+                return False
+        except Exception as e:
+            self.get_logger().warn(f"Mode verification failed: {e}")
+            return False
+    
     def print_mission_plan(self):
         """Display the complete mission plan"""
         self.get_logger().info(f'\n{"="*70}')
@@ -133,6 +166,7 @@ class MissionPlanner(Node):
     
     def send_yaw_command(self, yaw_deg):
         """Send yaw command to ArduPilot"""
+        self.get_logger().info(f'   Setting final yaw to {yaw_deg:.1f}°...')
         # Send MAV_CMD_CONDITION_YAW command
         self.connection.mav.command_long_send(
             self.connection.target_system,
@@ -145,20 +179,78 @@ class MissionPlanner(Node):
             0,              # param4: 0=absolute angle, 1=relative
             0, 0, 0         # params 5-7: unused
         )
+        time.sleep(2)
     
-    def get_current_position(self):
-        """Get current drone position from MAVLink"""
-        try:
-            msg = self.connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=0.5)
+    def send_position_target_until_reached(self, x, y, z, yaw_deg, tolerance=0.5):
+        """
+        Send position setpoint continuously until drone reaches target.
+        ArduPilot GUIDED mode requires continuous commands (like RC input).
+        """
+        # Convert ROS ENU to ArduPilot NED
+        ned_x = y      # North = ROS y
+        ned_y = x      # East = ROS x
+        ned_z = -z     # Down = -ROS z
+        yaw_rad = math.radians(yaw_deg)
+        
+        self.get_logger().info(f'🎯 NAVIGATING TO TARGET')
+        self.get_logger().info(f'   ROS ENU: X={x:.2f}, Y={y:.2f}, Z={z:.2f}')
+        self.get_logger().info(f'   NED: X={ned_x:.2f}, Y={ned_y:.2f}, Z={ned_z:.2f}, Yaw={yaw_deg:.1f}°')
+        self.get_logger().info(f'   Tolerance: {tolerance}m\n')
+        
+        frame = mavutil.mavlink.MAV_FRAME_LOCAL_NED
+        type_mask = 0x0FF8  # Position only
+        
+        start_time = time.time()
+        last_log_time = start_time
+        reached_count = 0  # Require multiple checks for stability
+        
+        while rclpy.ok():
+            # Send position command at 20Hz
+            self.connection.mav.set_position_target_local_ned_send(
+                0,
+                self.connection.target_system,
+                self.connection.target_component,
+                frame,
+                type_mask,
+                ned_x, ned_y, ned_z,
+                0, 0, 0,
+                0, 0, 0,
+                yaw_rad, 0
+            )
+            
+            # Get current position
+            msg = self.connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
             if msg:
-                # Convert NED to ENU (matching ROS coordinate system)
-                current_x = msg.y
-                current_y = msg.x
-                current_z = -msg.z
-                return current_x, current_y, current_z
-        except:
-            pass
-        return None, None, None
+                # Calculate distance to target
+                dx = ned_x - msg.x
+                dy = ned_y - msg.y
+                dz = ned_z - msg.z
+                dist = (dx**2 + dy**2 + dz**2)**0.5
+                
+                # Log progress every 2 seconds
+                current_time = time.time()
+                elapsed = current_time - start_time
+                if current_time - last_log_time > 2.0:
+                    self.get_logger().info(f'   [{elapsed:.0f}s] Distance: {dist:.2f}m')
+                    last_log_time = current_time
+                
+                # Check if reached (with stability check)
+                if dist < tolerance:
+                    reached_count += 1
+                    if reached_count >= 20:  # Stay near for 1 second (20 x 0.05s)
+                        self.get_logger().info(f'\n{"="*70}')
+                        self.get_logger().info(f'✓ TARGET REACHED in {elapsed:.1f}s!')
+                        self.get_logger().info(f'   Final distance: {dist:.2f}m')
+                        self.get_logger().info(f'{"="*70}\n')
+                        
+                        # Send yaw command
+                        self.send_yaw_command(yaw_deg)
+                        return  # Exit the loop - waypoint reached!
+                else:
+                    reached_count = 0
+            
+            # Sleep to maintain 20Hz
+            time.sleep(0.05)
     
     def execute_mission(self):
         """Execute the mission waypoint by waypoint"""
@@ -169,55 +261,13 @@ class MissionPlanner(Node):
             self.get_logger().info(f'🎯 Navigating to WP{idx + 1}/{len(self.waypoints)}: ({x:.2f}, {y:.2f}, {z:.2f}, {yaw:.1f}°)')
             self.get_logger().info(f'{"─"*70}')
             
-            # Publish goal - let ROS navigation handle path planning
+            # Publish goal for ROS visualization
             self.publish_goal(x, y, z, yaw)
             
-            # Wait for waypoint to be reached
-            start_time = time.time()
-            last_log_time = start_time
-            reached_count = 0  # Require staying near waypoint for stability
+            # Navigate to waypoint using same logic as goal_publisher
+            self.send_position_target_until_reached(x, y, z, yaw, tolerance=0.5)
             
-            while True:
-                # Get current position
-                curr_x, curr_y, curr_z = self.get_current_position()
-                
-                if curr_x is not None:
-                    # Calculate distance to target
-                    dx = x - curr_x
-                    dy = y - curr_y
-                    dz = z - curr_z
-                    dist = (dx**2 + dy**2 + dz**2)**0.5
-                    
-                    # Log progress every 2 seconds
-                    current_time = time.time()
-                    if current_time - last_log_time > 2.0:
-                        elapsed = current_time - start_time
-                        self.get_logger().info(f'  [{elapsed:.0f}s] Distance: {dist:.2f}m')
-                        last_log_time = current_time
-                    
-                    # Check if reached (with stability check)
-                    if dist < 1.0:  # Within 1m threshold
-                        reached_count += 1
-                        if reached_count >= 10:  # Stay near for 1 second (10 x 0.1s)
-                            elapsed = current_time - start_time
-                            self.get_logger().info(f'✓ WP{idx + 1} REACHED in {elapsed:.1f}s!')
-                            
-                            # Set yaw once waypoint is reached
-                            self.get_logger().info(f'  Setting yaw to {yaw:.1f}°...')
-                            self.send_yaw_command(yaw)
-                            time.sleep(1)  # Give time for yaw to adjust
-                            
-                            break
-                    else:
-                        reached_count = 0  # Reset if moved away
-                else:
-                    # No position data available
-                    current_time = time.time()
-                    if current_time - last_log_time > 2.0:
-                        self.get_logger().warn('  Waiting for position data...')
-                        last_log_time = current_time
-                
-                time.sleep(0.1)
+            self.get_logger().info(f'✓ WP{idx + 1} REACHED!')
             
             # Hover briefly before next waypoint
             if idx < len(self.waypoints) - 1:

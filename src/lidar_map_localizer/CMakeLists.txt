@@ -83,6 +83,13 @@ install(TARGETS ndt_gicp_localization
   DESTINATION lib/${PROJECT_NAME}
 )
 
-
+install(PROGRAMS
+  scripts/ground_plane.py
+  scripts/pcd64_conversion.py
+  scripts/teleop_control_node.py
+  scripts/translate_map.py
+  scripts/analyze_odom.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package()

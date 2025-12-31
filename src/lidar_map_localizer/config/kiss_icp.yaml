@@ -4,11 +4,11 @@ adaptive_threshold:
   min_motion_th: 0.1
 data:
   deskew: true
-  max_range: 50.0
+  max_range: 40.0
   min_range: 0.0
 mapping:
   max_points_per_voxel: 20
-  voxel_size: 0.5
+  voxel_size: 0.4
 out_dir: results
 registration:
   convergence_criterion: 0.0001
